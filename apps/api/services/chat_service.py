@@ -1,111 +1,165 @@
 """
 Chat Service
-Orchestrates the RAG pipeline: retrieve → format → generate → respond
+Routes user questions through the LangChain agent and builds the response
+with source citations.
 """
 
-from datetime import datetime, UTC
-from typing import List
+import re
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, UTC
+from typing import AsyncGenerator, List, Union
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from repositories.document_repository import DocumentRepository
 from repositories.chunk_repository import ChunkRepository
-from services import retriever, llm
+from services import agent
 from schemas import ChatResponse, SourceCitation
 
 
-async def ask(question: str, chunk_repo: ChunkRepository) -> ChatResponse:
+# Matches [source: doc_id] and [sources: id_a, id_b]
+_SOURCE_PATTERN = re.compile(
+    r"\[sources?:\s*([a-f0-9][a-f0-9\-,\s]*)\]",
+    re.IGNORECASE,
+)
+
+
+@dataclass
+class TokenEvent:
+    """A single streamed answer token."""
+    text: str
+
+
+@dataclass
+class SourcesEvent:
+    """The final source citations, emitted once streaming completes."""
+    sources: List[SourceCitation] = field(default_factory=list)
+
+
+# A streamed chat event is either an answer token or the trailing sources.
+StreamEvent = Union[TokenEvent, SourcesEvent]
+
+
+async def ask(
+    question: str,
+    session_id: str,
+    session: AsyncSession,
+) -> ChatResponse:
     """
-    Answer a question using RAG pipeline
-    
+    Answer a question by invoking the agent and attaching source citations
+
     Args:
         question: The user's question
-        chunk_repo: Repository for chunk database access
-        
+        session_id: The conversation session identifier
+        session: The active database session
+
     Returns:
-        ChatResponse with answer and source citations
+        ChatResponse with the agent's answer, sources, and session_id
     """
-    # Retrieve relevant chunks
-    chunks = await retriever.retrieve(question, chunk_repo, top_k=5)
-    
-    # If no relevant chunks found, return refusal
-    if not chunks:
-        return ChatResponse(
-            id=str(uuid.uuid4()),
-            content="I don't have that in my knowledge base.",
-            sources=[],
-            created_at=datetime.now(UTC).isoformat()
-        )
-    
-    # Format chunks into context string
-    context = _format_context(chunks)
-    
-    # Generate answer using LLM
-    answer = llm.generate_answer(question, context)
-    
-    # Extract unique source documents
-    sources = _extract_sources(chunks)
-    
+    # Route through the LangChain agent
+    agent_response = await agent.invoke(question, session_id, session)
+
+    # Parse cited source document IDs from the response content
+    doc_ids = _parse_source_ids(agent_response.content)
+
+    # Build source citations by looking up document metadata
+    sources = await _build_sources(doc_ids, session)
+
     return ChatResponse(
         id=str(uuid.uuid4()),
-        content=answer,
+        content=agent_response.content,
         sources=sources,
-        created_at=datetime.now(UTC).isoformat()
+        created_at=datetime.now(UTC).isoformat(),
+        session_id=session_id,
     )
 
 
-def _format_context(chunks: List[retriever.RetrievedChunk]) -> str:
+async def stream(
+    question: str,
+    session_id: str,
+    session: AsyncSession,
+) -> AsyncGenerator[StreamEvent, None]:
     """
-    Format retrieved chunks into context string for LLM
-    
-    Format:
-        [source: doc_id | filename]
-        content
-        
-        ---
-        
-        [source: doc_id | filename]
-        content
+    Stream an answer token by token, then emit source citations
+
+    Yields a :class:`TokenEvent` for every answer token as it is generated.
+    Once the answer is complete, the accumulated content is parsed for cited
+    document IDs and a single :class:`SourcesEvent` is emitted.
+
+    Args:
+        question: The user's question
+        session_id: The conversation session identifier
+        session: The active database session
+
+    Yields:
+        TokenEvent for each token, then a final SourcesEvent
     """
-    formatted = []
-    for chunk in chunks:
-        formatted.append(
-            f"[source: {chunk.document_id} | {chunk.filename}]\n{chunk.content}"
-        )
-    
-    return "\n\n---\n\n".join(formatted)
+    collected: List[str] = []
+    async for token in agent.astream(question, session_id, session):
+        collected.append(token)
+        yield TokenEvent(text=token)
+
+    content = "".join(collected)
+    doc_ids = _parse_source_ids(content)
+    sources = await _build_sources(doc_ids, session)
+    yield SourcesEvent(sources=sources)
 
 
-def _extract_sources(chunks: List[retriever.RetrievedChunk]) -> List[SourceCitation]:
+def _parse_source_ids(content: str) -> List[str]:
     """
-    Extract unique source documents from chunks
-    
-    - Deduplicate by document_id
-    - Include excerpt from most relevant chunk per document
-    - Order by highest similarity first
+    Extract and deduplicate source document IDs from response content
+
+    Args:
+        content: The agent response text
+
+    Returns:
+        Deduplicated list of document IDs in order of first appearance
     """
-    # Group chunks by document_id, keeping only the highest similarity chunk per doc
-    doc_map = {}
-    for chunk in chunks:
-        if chunk.document_id not in doc_map or chunk.similarity > doc_map[chunk.document_id].similarity:
-            doc_map[chunk.document_id] = chunk
-    
-    # Convert to SourceCitation objects
-    sources = []
-    for doc_id, chunk in doc_map.items():
-        # Take first 100 characters as excerpt
-        excerpt = chunk.content[:100]
-        if len(chunk.content) > 100:
-            excerpt += "..."
-        
+    doc_ids: List[str] = []
+    for match in _SOURCE_PATTERN.finditer(content):
+        raw = match.group(1)
+        for part in raw.split(","):
+            doc_id = part.strip()
+            if doc_id and doc_id not in doc_ids:
+                doc_ids.append(doc_id)
+    return doc_ids
+
+
+async def _build_sources(
+    doc_ids: List[str],
+    session: AsyncSession,
+) -> List[SourceCitation]:
+    """
+    Build source citations from cited document IDs
+
+    Args:
+        doc_ids: The cited document IDs
+        session: The active database session
+
+    Returns:
+        List of SourceCitation objects (skips IDs that don't resolve)
+    """
+    doc_repo = DocumentRepository(session)
+    chunk_repo = ChunkRepository(session)
+
+    sources: List[SourceCitation] = []
+    for doc_id in doc_ids:
+        document = await doc_repo.get_by_id(doc_id)
+        if document is None:
+            continue
+
+        # Use the first chunk as a preview excerpt
+        excerpt = ""
+        chunks = await chunk_repo.get_by_document_id(doc_id)
+        if chunks:
+            excerpt = chunks[0].content[:100]
+            if len(chunks[0].content) > 100:
+                excerpt += "..."
+
         sources.append(SourceCitation(
             doc_id=doc_id,
-            filename=chunk.filename,
-            excerpt=excerpt
+            filename=document.filename,
+            excerpt=excerpt,
         ))
-    
-    # Sort by similarity (highest first)
-    # We need to get back to the chunks to get similarity
-    sources.sort(
-        key=lambda s: doc_map[s.doc_id].similarity,
-        reverse=True
-    )
-    
+
     return sources
