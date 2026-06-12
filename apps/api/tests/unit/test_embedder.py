@@ -2,10 +2,19 @@
 Unit tests for embedder service
 """
 
+import httpx
 import pytest
 from unittest.mock import Mock, patch
+from openai import RateLimitError as OpenAIRateLimitError
 from services.embedder import embed_chunks, embed_query
-from services.exceptions import EmbeddingError
+from services.exceptions import EmbeddingError, RateLimitError
+
+
+def _openai_rate_limit_error() -> OpenAIRateLimitError:
+    """Build a real openai.RateLimitError (needs an httpx response)."""
+    request = httpx.Request("POST", "https://api.openai.com/v1/embeddings")
+    response = httpx.Response(429, request=request)
+    return OpenAIRateLimitError("rate limited", response=response, body=None)
 
 
 @patch('services.embedder.client')
@@ -102,4 +111,22 @@ def test_embed_query_api_failure(mock_client):
     mock_client.embeddings.create.side_effect = Exception("API error")
     
     with pytest.raises(EmbeddingError, match="Failed to generate query embedding"):
+        embed_query("Test query")
+
+
+@patch('services.embedder.client')
+def test_embed_chunks_rate_limit(mock_client):
+    """OpenAI 429 raises RateLimitError"""
+    mock_client.embeddings.create.side_effect = _openai_rate_limit_error()
+
+    with pytest.raises(RateLimitError, match="rate limited"):
+        embed_chunks(["Test chunk"])
+
+
+@patch('services.embedder.client')
+def test_embed_query_rate_limit(mock_client):
+    """OpenAI 429 raises RateLimitError"""
+    mock_client.embeddings.create.side_effect = _openai_rate_limit_error()
+
+    with pytest.raises(RateLimitError, match="rate limited"):
         embed_query("Test query")
