@@ -2,7 +2,6 @@
 Unit tests for chunker service
 """
 
-import pytest
 from services.chunker import chunk_text
 
 

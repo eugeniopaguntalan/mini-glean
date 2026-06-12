@@ -37,3 +37,8 @@ class ParseError(Exception):
 class EmbeddingError(Exception):
     """Raised when OpenAI embedding call fails"""
     pass
+
+
+class LLMError(Exception):
+    """Raised when the OpenAI chat completion call fails"""
+    pass

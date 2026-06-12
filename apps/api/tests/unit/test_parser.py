@@ -4,7 +4,6 @@ Unit tests for parser service
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-import io
 from services.parser import parse_pdf, parse_url, parse_note
 from services.exceptions import PageLimitExceededError, ParseError
 

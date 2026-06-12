@@ -10,15 +10,14 @@ from pydantic import BaseModel, HttpUrl, Field
 
 class DocumentResponse(BaseModel):
     """Response model for a single document"""
+    model_config = {"from_attributes": True}
+    
     id: str
     filename: str
     type: str  # 'pdf', 'url', or 'note'
     tags: List[str]
     chunk_count: int
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class DocumentListResponse(BaseModel):
@@ -42,3 +41,23 @@ class ErrorResponse(BaseModel):
     """Standard error response"""
     detail: str
     code: str
+
+
+class ChatRequest(BaseModel):
+    """Request model for chat endpoint"""
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class SourceCitation(BaseModel):
+    """Source citation in chat response"""
+    doc_id: str
+    filename: str
+    excerpt: str
+
+
+class ChatResponse(BaseModel):
+    """Response model for chat endpoint"""
+    id: str           # unique response ID
+    content: str      # the generated answer
+    sources: list[SourceCitation]
+    created_at: str   # ISO timestamp

@@ -17,8 +17,6 @@ from services import document_service
 from services.exceptions import (
     DocumentNotFoundError,
     DocumentLimitExceededError,
-    InvalidFileTypeError,
-    FileTooLargeError,
     PageLimitExceededError,
     ParseError,
     EmbeddingError,
@@ -74,17 +72,17 @@ async def upload_pdf(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except PageLimitExceededError as e:
+    except PageLimitExceededError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="PDF exceeds 20 page limit"
         )
-    except ParseError as e:
+    except ParseError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Failed to parse document content"
         )
-    except EmbeddingError as e:
+    except EmbeddingError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Embedding service unavailable"
@@ -115,12 +113,12 @@ async def ingest_url(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except ParseError as e:
+    except ParseError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Failed to parse document content"
         )
-    except EmbeddingError as e:
+    except EmbeddingError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Embedding service unavailable"
@@ -151,12 +149,12 @@ async def create_note(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except ParseError as e:
+    except ParseError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Failed to parse document content"
         )
-    except EmbeddingError as e:
+    except EmbeddingError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Embedding service unavailable"

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from config import settings
 from database import engine
-from routers import health, documents
+from routers import health, documents, chat
 
 
 @asynccontextmanager
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
-        print(f"✓ Database connected successfully")
+        print("✓ Database connected successfully")
         print(f"✓ Environment: {settings.ENVIRONMENT}")
     except Exception as e:
         print(f"✗ Database connection failed: {e}")
@@ -53,6 +53,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, tags=["health"])
 app.include_router(documents.router)
+app.include_router(chat.router)
 
 
 @app.get("/")
