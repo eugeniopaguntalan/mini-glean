@@ -1,0 +1,8 @@
+{
+  "name": "@miniglean/shared",
+  "version": "0.1.0",
+  "description": "Shared types for MiniGlean",
+  "main": "types.ts",
+  "types": "types.ts",
+  "private": true
+}
