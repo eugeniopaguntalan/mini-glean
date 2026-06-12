@@ -1,11 +1,10 @@
 # MiniGlean
 
-> A personal knowledge base with AI-powered search and chat
+A personal knowledge base with AI-powered search and chat
 
 MiniGlean lets you upload PDFs, save URLs, and create notes, then search and chat with your knowledge using AI. Every answer is grounded in your documents and comes back with source citations.
 
-![MiniGlean demo](docs/assets/demo.gif)
-
+> ![MiniGlean demo](docs/assets/demo.gif)
 > _Demo GIF placeholder — record a ~20s walkthrough following [demo/demo-script.md](demo/demo-script.md) and save it to `docs/assets/demo.gif`._
 
 ## Features
