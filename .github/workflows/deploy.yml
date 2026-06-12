@@ -1,0 +1,68 @@
+name: Deploy
+
+# Continuous deployment. Gated on the CI workflow: this only runs after "CI"
+# completes successfully on main, so code never deploys unless tests pass.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+# OIDC federation to assume an AWS deploy role (no long-lived keys).
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    # The gate: skip everything unless CI passed.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Deploy CDK stack
+        working-directory: infra
+        run: npx cdk deploy --require-approval never
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        working-directory: apps/api
+        run: pip install -r requirements.txt
+
+      # Requires network access to RDS (private). Run from a self-hosted runner
+      # inside the VPC or via a bastion/VPN — see docs/deployment.md.
+      - name: Run database migrations
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: alembic upgrade head
+
+      - name: Smoke test (health check)
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "${API_URL}/health" | tee /dev/stderr

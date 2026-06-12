@@ -3,6 +3,7 @@ Unit tests for parser service
 """
 
 import pytest
+import httpx
 from unittest.mock import Mock, patch, MagicMock
 from services.parser import parse_pdf, parse_url, parse_note
 from services.exceptions import PageLimitExceededError, ParseError
@@ -126,31 +127,31 @@ def test_parse_url_valid(mock_bs, mock_httpx):
     assert "Content here" in text
 
 
-@patch('services.parser.httpx')
-def test_parse_url_timeout(mock_httpx):
+@patch('services.parser.httpx.get')
+def test_parse_url_timeout(mock_get):
     """URL that times out raises ParseError"""
-    mock_httpx.get.side_effect = mock_httpx.TimeoutException("Timeout")
+    mock_get.side_effect = httpx.TimeoutException("Timeout")
     
     with pytest.raises(ParseError, match="timed out"):
         parse_url("https://example.com")
 
 
-@patch('services.parser.httpx')
-def test_parse_url_http_error(mock_httpx):
+@patch('services.parser.httpx.get')
+def test_parse_url_http_error(mock_get):
     """URL with HTTP error raises ParseError"""
-    mock_httpx.get.side_effect = mock_httpx.HTTPError("404 Not Found")
+    mock_get.side_effect = httpx.HTTPError("404 Not Found")
     
     with pytest.raises(ParseError, match="Failed to fetch URL"):
         parse_url("https://example.com")
 
 
-@patch('services.parser.httpx')
 @patch('services.parser.BeautifulSoup')
-def test_parse_url_empty_content(mock_bs, mock_httpx):
+@patch('services.parser.httpx.get')
+def test_parse_url_empty_content(mock_get, mock_bs):
     """URL with no text content raises ParseError"""
     mock_response = Mock()
     mock_response.text = "<html></html>"
-    mock_httpx.get.return_value = mock_response
+    mock_get.return_value = mock_response
     
     mock_soup = Mock()
     mock_soup.find.return_value = None

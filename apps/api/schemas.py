@@ -5,6 +5,7 @@ Request and response models for API endpoints
 
 from datetime import datetime
 from typing import List, Optional
+from uuid import uuid4
 from pydantic import BaseModel, HttpUrl, Field
 
 
@@ -46,6 +47,7 @@ class ErrorResponse(BaseModel):
 class ChatRequest(BaseModel):
     """Request model for chat endpoint"""
     question: str = Field(min_length=1, max_length=2000)
+    session_id: str = Field(default_factory=lambda: str(uuid4()))
 
 
 class SourceCitation(BaseModel):
@@ -61,3 +63,4 @@ class ChatResponse(BaseModel):
     content: str      # the generated answer
     sources: list[SourceCitation]
     created_at: str   # ISO timestamp
+    session_id: str   # session identifier so the client can reuse it

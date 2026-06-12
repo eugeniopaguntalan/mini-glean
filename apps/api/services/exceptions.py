@@ -42,3 +42,8 @@ class EmbeddingError(Exception):
 class LLMError(Exception):
     """Raised when the OpenAI chat completion call fails"""
     pass
+
+
+class RateLimitError(Exception):
+    """Raised when an OpenAI call is rate limited (HTTP 429)"""
+    pass

@@ -1,0 +1,39 @@
+Team Sync — Product & Engineering
+Date: 2025-03-12
+Attendees: Priya (PM), Marcus (Eng Lead), Dana (Design), Sam (Backend), Jo (Frontend)
+
+Summary
+-------
+Weekly sync covering the MiniGlean beta launch, outstanding bugs, and the
+upcoming demo. Overall the project is on track for the end-of-month milestone.
+
+Decisions
+---------
+- Ship the streaming chat experience in the beta; the non-streaming endpoint
+  stays as a fallback only.
+- Cap the demo knowledge base at 20 documents to keep retrieval fast and
+  predictable.
+- Use AWS (Lambda + RDS + Amplify) for hosting rather than a single VM, to keep
+  idle cost near zero.
+- Postpone multi-user auth — the app stays single-user for now.
+
+Action Items
+------------
+- Sam: add friendly error messages for rate limits and parse failures by Mar 17.
+- Jo: wire the retry button on the chat error banner and reset the file input
+  after a failed upload by Mar 17.
+- Dana: finalize the empty-state copy and the demo GIF storyboard by Mar 14.
+- Priya: write the 3-minute demo script and circulate for review by Mar 18.
+- Marcus: set up the CI gate so deploys only run after tests pass by Mar 19.
+
+Deadlines
+---------
+- Code freeze for the beta: March 24.
+- Demo dry-run with the wider team: March 26.
+- Public repo + launch: March 31.
+
+Notes
+-----
+Retrieval quality looks good on the sample documents. The team agreed the
+biggest remaining risk is cold-start latency on Lambda; the scheduled warmer
+should mitigate it. Follow up next week on the NAT gateway cost.
