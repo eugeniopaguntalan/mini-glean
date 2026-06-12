@@ -9,14 +9,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.tools import ToolException
+from openai import RateLimitError as OpenAIRateLimitError
 from database import get_session
 from schemas import ChatRequest, ChatResponse
 from services import chat_service
 from services.chat_service import SourcesEvent, TokenEvent
-from services.exceptions import EmbeddingError, LLMError
+from services.exceptions import EmbeddingError, LLMError, RateLimitError
 
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+# Friendly message shown to users when the AI provider is rate limited
+_RATE_LIMIT_MESSAGE = "AI service is busy. Please try again in a moment."
 
 
 @router.post("", response_model=ChatResponse)
@@ -47,6 +51,11 @@ async def chat(
         )
         return response
 
+    except (RateLimitError, OpenAIRateLimitError):
+        raise HTTPException(
+            status_code=429,
+            detail=_RATE_LIMIT_MESSAGE
+        )
     except ToolException:
         raise HTTPException(
             status_code=500,
@@ -66,6 +75,9 @@ async def chat(
 
 # Sentinel the client uses to recognise the final source-citation event
 _SOURCES_PREFIX = "[SOURCES]"
+
+# Sentinel the client uses to recognise a mid-stream error
+_ERROR_PREFIX = "[ERROR]"
 
 
 def _format_sse(payload: str) -> str:
@@ -107,9 +119,12 @@ async def chat_stream(
                 elif isinstance(event, SourcesEvent):
                     sources = [source.model_dump() for source in event.sources]
                     yield _format_sse(_SOURCES_PREFIX + json.dumps(sources))
+        except (RateLimitError, OpenAIRateLimitError):
+            yield _format_sse(_ERROR_PREFIX + _RATE_LIMIT_MESSAGE)
         except (ToolException, EmbeddingError, LLMError):
-            # Surface a terminal marker so the client closes the stream cleanly.
-            pass
+            yield _format_sse(
+                _ERROR_PREFIX + "The assistant ran into a problem. Please try again."
+            )
         finally:
             yield "data: [DONE]\n\n"
 

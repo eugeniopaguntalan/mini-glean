@@ -6,6 +6,7 @@ API endpoints for document ingestion and management
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from openai import RateLimitError as OpenAIRateLimitError
 
 from database import get_session
 from schemas import (
@@ -20,6 +21,7 @@ from services.exceptions import (
     PageLimitExceededError,
     ParseError,
     EmbeddingError,
+    RateLimitError,
 )
 
 
@@ -28,6 +30,10 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 # Maximum file size: 10MB
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
+
+# Friendly messages surfaced directly to the user
+_LIMIT_MESSAGE = "Knowledge base full. Delete a document to upload more."
+_RATE_LIMIT_MESSAGE = "AI service is busy. Please try again in a moment."
 
 
 @router.post("/upload/pdf", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -67,10 +73,10 @@ async def upload_pdf(
         )
         return result
         
-    except DocumentLimitExceededError as e:
+    except DocumentLimitExceededError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=_LIMIT_MESSAGE
         )
     except PageLimitExceededError:
         raise HTTPException(
@@ -80,9 +86,19 @@ async def upload_pdf(
     except ParseError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Failed to parse document content"
+            detail="Unable to parse this PDF — the file may be corrupted."
         )
-    except EmbeddingError:
+    except RateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_RATE_LIMIT_MESSAGE
+        )
+    except (EmbeddingError, OpenAIRateLimitError) as e:
+        if isinstance(e, OpenAIRateLimitError):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_RATE_LIMIT_MESSAGE
+            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Embedding service unavailable"
@@ -108,17 +124,27 @@ async def ingest_url(
         )
         return result
         
-    except DocumentLimitExceededError as e:
+    except DocumentLimitExceededError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=_LIMIT_MESSAGE
         )
     except ParseError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Failed to parse document content"
+            detail="Could not fetch or read content from that URL."
         )
-    except EmbeddingError:
+    except RateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_RATE_LIMIT_MESSAGE
+        )
+    except (EmbeddingError, OpenAIRateLimitError) as e:
+        if isinstance(e, OpenAIRateLimitError):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_RATE_LIMIT_MESSAGE
+            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Embedding service unavailable"
@@ -144,17 +170,27 @@ async def create_note(
         )
         return result
         
-    except DocumentLimitExceededError as e:
+    except DocumentLimitExceededError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=_LIMIT_MESSAGE
         )
     except ParseError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Failed to parse document content"
         )
-    except EmbeddingError:
+    except RateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_RATE_LIMIT_MESSAGE
+        )
+    except (EmbeddingError, OpenAIRateLimitError) as e:
+        if isinstance(e, OpenAIRateLimitError):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_RATE_LIMIT_MESSAGE
+            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Embedding service unavailable"

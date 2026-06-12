@@ -1,0 +1,27 @@
+{
+  "name": "miniglean-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK infrastructure for MiniGlean (Lambda + RDS + Amplify)",
+  "bin": {
+    "miniglean": "bin/miniglean.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.16",
+    "aws-cdk": "2.130.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.3.3"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-amplify-alpha": "2.130.0-alpha.0",
+    "aws-cdk-lib": "2.130.0",
+    "constructs": "10.3.0"
+  }
+}

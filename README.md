@@ -2,18 +2,32 @@
 
 > A personal knowledge base with AI-powered search and chat
 
-MiniGlean lets you upload PDFs, save URLs, and create notes, then search and chat with your knowledge using AI.
+MiniGlean lets you upload PDFs, save URLs, and create notes, then search and chat with your knowledge using AI. Every answer is grounded in your documents and comes back with source citations.
+
+![MiniGlean demo](docs/assets/demo.gif)
+
+> _Demo GIF placeholder — record a ~20s walkthrough following [demo/demo-script.md](demo/demo-script.md) and save it to `docs/assets/demo.gif`._
+
+## Features
+
+- **Ingest anything** — upload PDFs, scrape static web pages by URL, or jot quick notes with tags.
+- **RAG search** — documents are chunked, embedded, and stored as vectors; questions run a cosine-similarity search over them.
+- **Agentic chat** — a LangChain agent with four tools (search, summarize, compare, add-note) chooses how to answer.
+- **Streaming answers** — responses stream token by token over Server-Sent Events.
+- **Always cited** — every AI answer includes the source documents it used.
+- **Graceful failure** — friendly, specific messages for offline state, rate limits, parse failures, and dropped streams, with retry.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14, React 19, TypeScript, Tailwind CSS (v4), Material Design 3 |
-| Backend | FastAPI, Python 3.11, Async SQLAlchemy, Pydantic |
-| Database | PostgreSQL 16 with pgvector extension |
-| AI | OpenAI (GPT-4o, text-embedding-3-small) |
-| Orchestration | Docker Compose |
-| Migrations | Alembic |
+| Layer | Technology | Hosted On |
+|-------|-----------|-----------|
+| Frontend | Next.js (App Router), React 19, TypeScript, Tailwind CSS v4, Material Design 3 | AWS Amplify |
+| Backend | FastAPI, Python 3.11, Async SQLAlchemy, Pydantic, Mangum | AWS Lambda + API Gateway |
+| AI / Agent | LangChain, OpenAI GPT-4o, text-embedding-3-small | OpenAI API |
+| Database | PostgreSQL 16 with pgvector | AWS RDS |
+| Infrastructure | AWS CDK (TypeScript) | — |
+| Migrations | Alembic | — |
+| Local dev | Docker Compose | — |
 
 ## Prerequisites
 
@@ -60,6 +74,18 @@ docker-compose exec api alembic upgrade head
 - Frontend: http://localhost:3000
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
+
+6. **Seed demo data** (optional, in a new terminal)
+
+Generate the sample PDFs and load them, plus a meeting note, into the running app. The seed is idempotent — safe to run more than once.
+
+```bash
+# Generate the demo PDFs (one-time)
+cd apps/api && .venv/bin/python ../../demo/generate_documents.py
+
+# Load them into the running app
+cd ../.. && NEXT_PUBLIC_API_URL=http://localhost:8000 npx tsx demo/seed.ts
+```
 
 ## Manual Start (without Docker)
 
@@ -119,6 +145,10 @@ miniglean/
 │       └── lib/      # Utilities (API client, theme)
 ├── packages/
 │   └── shared/       # Shared TypeScript types
+├── infra/            # AWS CDK infrastructure (Lambda, RDS, Amplify)
+│   ├── bin/          # CDK app entry point
+│   └── stacks/       # Database, secrets, API, frontend constructs
+├── demo/             # Demo seed script and sample documents
 ├── docs/             # Documentation
 └── docker-compose.yml
 ```
@@ -159,17 +189,19 @@ See the `docs/` directory for detailed documentation:
 - [Environment Variables](docs/environment-variables.md)
 - [Deployment](docs/deployment.md)
 - [Integration Testing](docs/integration-test.md)
+- [Contributing](CONTRIBUTING.md)
+- [Demo Script](demo/demo-script.md)
 
 ## Milestones
 
 Development is tracked through milestones in the `milestones/` directory:
 
 1. ✅ Project Setup (infrastructure, database, Docker)
-2. Document Ingestion (PDF parsing, URL scraping, chunking)
-3. RAG Core (embeddings, vector search)
-4. Chat Agent (LangChain, OpenAI)
-5. UI Polish (Material Design 3 components)
-6. Demo Ready (deployment, testing)
+2. ✅ Document Ingestion (PDF parsing, URL scraping, chunking)
+3. ✅ RAG Core (embeddings, vector search)
+4. ✅ Chat Agent (LangChain, OpenAI)
+5. ✅ UI Polish (Material Design 3 components)
+6. ✅ Demo Ready (AWS infra, CI/CD, hardening, seed)
 
 ## License
 

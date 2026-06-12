@@ -4,13 +4,13 @@ Single entry point for all OpenAI chat completions
 """
 
 from typing import Optional
-from openai import OpenAI
+from openai import OpenAI, RateLimitError as OpenAIRateLimitError
 from langchain_openai import ChatOpenAI
 from config import settings
 from prompts.qa import QA_SYSTEM_PROMPT
 from prompts.summarize import SUMMARIZE_PROMPT
 from prompts.compare import COMPARE_PROMPT
-from services.exceptions import LLMError
+from services.exceptions import LLMError, RateLimitError
 
 
 # Singleton client instance
@@ -84,6 +84,8 @@ def generate_answer(question: str, context: str) -> str:
         # Extract and return the answer
         return response.choices[0].message.content or ""
         
+    except OpenAIRateLimitError as e:
+        raise RateLimitError(f"LLM service rate limited: {str(e)}")
     except Exception as e:
         raise LLMError(f"Failed to generate answer: {str(e)}")
 
@@ -116,6 +118,8 @@ def summarize(content: str) -> str:
         
         return response.choices[0].message.content or ""
         
+    except OpenAIRateLimitError as e:
+        raise RateLimitError(f"LLM service rate limited: {str(e)}")
     except Exception as e:
         raise LLMError(f"Failed to generate summary: {str(e)}")
 
@@ -156,5 +160,7 @@ def compare(content_a: str, content_b: str, doc_id_a: str, doc_id_b: str) -> str
         
         return response.choices[0].message.content or ""
         
+    except OpenAIRateLimitError as e:
+        raise RateLimitError(f"LLM service rate limited: {str(e)}")
     except Exception as e:
         raise LLMError(f"Failed to compare documents: {str(e)}")

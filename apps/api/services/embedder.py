@@ -4,9 +4,9 @@ Generates vector embeddings using OpenAI
 """
 
 from typing import List
-from openai import OpenAI
+from openai import OpenAI, RateLimitError as OpenAIRateLimitError
 from config import settings
-from services.exceptions import EmbeddingError
+from services.exceptions import EmbeddingError, RateLimitError
 
 
 # Initialize OpenAI client
@@ -49,6 +49,8 @@ def embed_chunks(chunks: List[str]) -> List[List[float]]:
         
         return all_embeddings
         
+    except OpenAIRateLimitError as e:
+        raise RateLimitError(f"Embedding service rate limited: {str(e)}")
     except Exception as e:
         raise EmbeddingError(f"Failed to generate embeddings: {str(e)}")
 
@@ -74,5 +76,7 @@ def embed_query(query: str) -> List[float]:
         
         return response.data[0].embedding
         
+    except OpenAIRateLimitError as e:
+        raise RateLimitError(f"Embedding service rate limited: {str(e)}")
     except Exception as e:
         raise EmbeddingError(f"Failed to generate query embedding: {str(e)}")
