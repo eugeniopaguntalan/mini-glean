@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from repositories.document_repository import DocumentRepository
 from repositories.chunk_repository import ChunkRepository
 from services import agent
+from services import agent_mock
+from config import settings
 from schemas import ChatResponse, SourceCitation
 
 
@@ -56,8 +58,11 @@ async def ask(
     Returns:
         ChatResponse with the agent's answer, sources, and session_id
     """
-    # Route through the LangChain agent
-    agent_response = await agent.invoke(question, session_id, session)
+    # Route through the agent (mock or real based on config)
+    if settings.USE_MOCK_LLM:
+        agent_response = await agent_mock.invoke(question, session_id, session)
+    else:
+        agent_response = await agent.invoke(question, session_id, session)
 
     # Parse cited source document IDs from the response content
     doc_ids = _parse_source_ids(agent_response.content)
@@ -95,9 +100,16 @@ async def stream(
         TokenEvent for each token, then a final SourcesEvent
     """
     collected: List[str] = []
-    async for token in agent.astream(question, session_id, session):
-        collected.append(token)
-        yield TokenEvent(text=token)
+    
+    # Use mock streaming in demo mode
+    if settings.USE_MOCK_LLM:
+        async for token in agent_mock.stream(question, session_id, session):
+            collected.append(token)
+            yield TokenEvent(text=token)
+    else:
+        async for token in agent.astream(question, session_id, session):
+            collected.append(token)
+            yield TokenEvent(text=token)
 
     content = "".join(collected)
     doc_ids = _parse_source_ids(content)

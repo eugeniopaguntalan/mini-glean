@@ -9,8 +9,11 @@ from config import settings
 from services.exceptions import EmbeddingError, RateLimitError
 
 
-# Initialize OpenAI client
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+# Initialize OpenAI client (only if not in mock mode)
+if settings.USE_MOCK_LLM:
+    client = None  # type: ignore
+else:
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 def embed_chunks(chunks: List[str]) -> List[List[float]]:
@@ -28,6 +31,11 @@ def embed_chunks(chunks: List[str]) -> List[List[float]]:
     """
     if not chunks:
         return []
+    
+    # Use mock embeddings in demo mode
+    if settings.USE_MOCK_LLM:
+        from services.llm_mock import mock_embedding
+        return [mock_embedding(chunk) for chunk in chunks]
     
     try:
         # Process in batches of 20 to stay under rate limits
@@ -68,6 +76,11 @@ def embed_query(query: str) -> List[float]:
     Raises:
         EmbeddingError: If the OpenAI API call fails
     """
+    # Use mock embedding in demo mode
+    if settings.USE_MOCK_LLM:
+        from services.llm_mock import mock_embedding
+        return mock_embedding(query)
+    
     try:
         response = client.embeddings.create(
             model=settings.EMBEDDING_MODEL,

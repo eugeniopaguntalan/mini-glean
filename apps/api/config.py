@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "DEBUG"
     
+    # Mock mode for demo/testing without API calls
+    USE_MOCK_LLM: bool = False
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

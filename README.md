@@ -35,6 +35,8 @@ MiniGlean lets you upload PDFs, save URLs, and create notes, then search and cha
 - Python 3.11+ (optional, for local development without Docker)
 - OpenAI API key
 
+> **🎭 Don't have an API key?** Use [Mock Mode](MOCK_MODE.md) to run the demo completely offline with pre-loaded data!
+
 ## Quick Start
 
 1. **Clone and navigate to the repository**
